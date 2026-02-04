@@ -1,3 +1,5 @@
+use germterm::color::Color;
+
 const fn build_tetromino_bitmask(rows: [&str; 4]) -> u16 {
     let mut bits = 0u16;
     let mut y = 0;
@@ -125,4 +127,15 @@ pub fn rotate_90_counter_clockwise(mask: u16) -> u16 {
     }
 
     new
+}
+
+#[inline]
+pub fn scale_lightness(c: Color, factor: f32) -> Color {
+    let factor_q8 = (factor * 256.0).round() as i32;
+    let factor_q8 = factor_q8.clamp(0, 511) as u16;
+
+    let r = ((c.r() as u16 * factor_q8) >> 8).min(255) as u8;
+    let g = ((c.g() as u16 * factor_q8) >> 8).min(255) as u8;
+    let b = ((c.b() as u16 * factor_q8) >> 8).min(255) as u8;
+    Color::new(r, g, b, c.a())
 }

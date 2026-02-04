@@ -2,7 +2,14 @@ mod tetromino;
 
 use germterm::{
     color::{Color, lerp},
-    crossterm::event::{Event, KeyCode, KeyEvent},
+    crossterm::{
+        self,
+        event::{
+            Event, KeyCode, KeyEvent, KeyEventKind, KeyboardEnhancementFlags,
+            PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
+        },
+        execute,
+    },
     draw::{Layer, draw_rect, draw_twoxel},
     engine::{Engine, end_frame, exit_cleanup, init, start_frame},
     input::poll_input,
@@ -10,7 +17,7 @@ use germterm::{
 use std::io;
 
 use crate::tetromino::{
-    Tetromino, rotate_90_clockwise, rotate_90_counter_clockwise, tetromino_bitmask,
+    Tetromino, rotate_90_clockwise, rotate_90_counter_clockwise, scale_lightness, tetromino_bitmask,
 };
 
 struct TetrominoState {
@@ -42,6 +49,7 @@ fn main() -> io::Result<()> {
                 }) => break 'update_loop,
                 Event::Key(KeyEvent {
                     code: KeyCode::Char('e'),
+                    kind: KeyEventKind::Press,
                     ..
                 }) => {
                     controlled_tetromino.bitmask =
@@ -49,16 +57,19 @@ fn main() -> io::Result<()> {
                 }
                 Event::Key(KeyEvent {
                     code: KeyCode::Char('r'),
+                    kind: KeyEventKind::Press,
                     ..
                 }) => {
                     controlled_tetromino.bitmask = rotate_90_clockwise(controlled_tetromino.bitmask)
                 }
                 Event::Key(KeyEvent {
                     code: KeyCode::Left,
+                    kind: KeyEventKind::Press,
                     ..
                 }) => controlled_tetromino.x -= 1,
                 Event::Key(KeyEvent {
                     code: KeyCode::Right,
+                    kind: KeyEventKind::Press,
                     ..
                 }) => controlled_tetromino.x += 1,
                 _ => {}
@@ -90,6 +101,7 @@ fn main() -> io::Result<()> {
     }
 
     exit_cleanup(&mut engine)?;
+
     Ok(())
 }
 
@@ -107,7 +119,8 @@ fn draw_tetromino(
 
             // Checkerboard dimming to differentiate each pixel a little bit
             let color = if (x + y) % 2 == 0 {
-                lerp(color, Color::BLACK.with_alpha(color.a()), 0.15)
+                // lerp(color, Color::BLACK.with_alpha(color.a()), 0.15)
+                scale_lightness(color, 0.2)
             } else {
                 color
             };
