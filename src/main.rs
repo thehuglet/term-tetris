@@ -7,9 +7,9 @@ use germterm::{
             Event, KeyCode, KeyEvent, KeyEventKind, KeyboardEnhancementFlags,
             PushKeyboardEnhancementFlags,
         },
-        execute,
+        execute, terminal,
     },
-    draw::{Layer, draw_twoxel},
+    draw::{Layer, draw_fps_counter, draw_twoxel},
     engine::{Engine, end_frame, exit_cleanup, init, start_frame},
     input::poll_input,
 };
@@ -32,10 +32,12 @@ fn main() -> io::Result<()> {
     let mut layer = Layer::new(&mut engine, 0);
 
     init(&mut engine)?;
-    execute!(
-        engine.stdout,
-        PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::REPORT_ALL_KEYS_AS_ESCAPE_CODES),
-    )?;
+    if terminal::supports_keyboard_enhancement().unwrap_or(false) {
+        execute!(
+            engine.stdout,
+            PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::REPORT_ALL_KEYS_AS_ESCAPE_CODES),
+        )?;
+    }
 
     let fall_speed: f32 = 1.0;
     let mut fall_timer: f32 = 0.0;
@@ -44,7 +46,7 @@ fn main() -> io::Result<()> {
         rotation: Rotation::North,
         x: 4,
         y: 4,
-        color: Color::ORANGE,
+        color: Color::new(255, 0, 255, 255),
     };
 
     'update_loop: loop {
@@ -93,6 +95,7 @@ fn main() -> io::Result<()> {
 
         draw_tetromino(&mut layer, &controlled_tetromino);
 
+        draw_fps_counter(&mut layer, 0, 0);
         end_frame(&mut engine)?;
     }
 
@@ -121,10 +124,10 @@ fn draw_tetromino(layer: &mut Layer, tetromino_state: &TetrominoState) {
 /// Coordinate space: 2x2 twoxel grid
 fn draw_block(layer: &mut Layer, x: i16, y: i16, color: Color) {
     let offsets = [
-        (0, 0, color),
+        (0, 0, shift_hue(color, 7.0)),
         (1, 0, scale_lightness(color, 0.8)),
         (0, 1, scale_lightness(color, 0.8)),
-        (1, 1, scale_lightness(color, 0.6)),
+        (1, 1, shift_hue(scale_lightness(color, 0.6), -7.0)),
     ];
 
     let base_x = x as f32 * 2.0;
@@ -142,6 +145,37 @@ pub fn scale_lightness(c: Color, factor: f32) -> Color {
     let r = ((c.r() as u16).saturating_mul(factor_q8) >> 8).min(255) as u8;
     let g = ((c.g() as u16).saturating_mul(factor_q8) >> 8).min(255) as u8;
     let b = ((c.b() as u16).saturating_mul(factor_q8) >> 8).min(255) as u8;
+
+    Color::new(r, g, b, c.a())
+}
+
+pub fn shift_hue(c: Color, degrees: f32) -> Color {
+    // Approximate hue rotation in RGB space
+    let deg = degrees.to_radians();
+    let cos_deg = deg.cos();
+    let sin_deg = deg.sin();
+
+    let r = c.r() as f32;
+    let g = c.g() as f32;
+    let b = c.b() as f32;
+
+    // Rotation matrix for approximate hue shift
+    let new_r = (0.299 + 0.701 * cos_deg + 0.168 * sin_deg) * r
+        + (0.587 - 0.587 * cos_deg + 0.330 * sin_deg) * g
+        + (0.114 - 0.114 * cos_deg - 0.497 * sin_deg) * b;
+
+    let new_g = (0.299 - 0.299 * cos_deg - 0.328 * sin_deg) * r
+        + (0.587 + 0.413 * cos_deg + 0.035 * sin_deg) * g
+        + (0.114 - 0.114 * cos_deg + 0.292 * sin_deg) * b;
+
+    let new_b = (0.299 - 0.300 * cos_deg + 1.250 * sin_deg) * r
+        + (0.587 - 0.588 * cos_deg - 1.050 * sin_deg) * g
+        + (0.114 + 0.886 * cos_deg - 0.203 * sin_deg) * b;
+
+    // Clamp to 0..255 and preserve alpha
+    let r = new_r.clamp(0.0, 255.0) as u8;
+    let g = new_g.clamp(0.0, 255.0) as u8;
+    let b = new_b.clamp(0.0, 255.0) as u8;
 
     Color::new(r, g, b, c.a())
 }
