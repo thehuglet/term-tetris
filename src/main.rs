@@ -1,3 +1,4 @@
+mod coord_space;
 mod tetromino;
 
 use germterm::{
@@ -9,14 +10,17 @@ use germterm::{
         },
         execute, terminal,
     },
-    draw::{Layer, draw_fps_counter, draw_twoxel},
+    draw::{Layer, draw_fps_counter, draw_octad, draw_rect, draw_twoxel},
     engine::{Engine, end_frame, exit_cleanup, init, start_frame},
     input::poll_input,
 };
 use std::io;
 
-use crate::tetromino::{
-    Rotation, Tetromino, rotate_clockwise, rotate_counter_clockwise, tetromino_bitmask,
+use crate::{
+    coord_space::TetrisBlockCoords,
+    tetromino::{
+        Rotation, Tetromino, rotate_clockwise, rotate_counter_clockwise, tetromino_bitmask,
+    },
 };
 
 struct TetrominoState {
@@ -27,8 +31,14 @@ struct TetrominoState {
     y: i16,
 }
 
+pub const TERM_WIDTH: usize = 40;
+pub const TERM_HEIGHT: usize = 24;
+pub const BOARD_SIZE: (usize, usize) = (10, 20);
+
 fn main() -> io::Result<()> {
-    let mut engine = Engine::new(40, 20).title("term-tetris").limit_fps(240);
+    let mut engine = Engine::new(TERM_WIDTH as u16, TERM_HEIGHT as u16)
+        .title("term-tetris")
+        .limit_fps(240);
     let mut layer = Layer::new(&mut engine, 0);
 
     init(&mut engine)?;
@@ -39,7 +49,7 @@ fn main() -> io::Result<()> {
         )?;
     }
 
-    let fall_speed: f32 = 1.0;
+    let fall_speed: f32 = 2.0;
     let mut fall_timer: f32 = 0.0;
     let mut controlled_tetromino = TetrominoState {
         tetromino: Tetromino::T,
@@ -93,15 +103,39 @@ fn main() -> io::Result<()> {
             controlled_tetromino.y += 1;
         }
 
-        draw_tetromino(&mut layer, &controlled_tetromino);
+        draw_tetris_board(&mut layer, 8.0, 1.0, &mut controlled_tetromino);
 
-        draw_fps_counter(&mut layer, 0, 0);
+        // draw_fps_counter(&mut layer, 0, 0);
         end_frame(&mut engine)?;
     }
 
     exit_cleanup(&mut engine)?;
-
     Ok(())
+}
+
+fn draw_tetris_board(
+    layer: &mut Layer,
+    origin_pos: TetrisBlockCoords,
+    controlled_tetromino: &mut TetrominoState,
+) {
+    // Border
+    let width_octads: i16 = 45;
+    let height_octads: i16 = 81;
+
+    let x_offset_octads: i16 = -1;
+    let y_offset_octads: i16 = -1;
+
+    for y in 0..=height_octads {
+        for x in 0..=width_octads {
+            if x == 0 || x == width_octads || y == 0 || y == height_octads {
+                let  = Tetromino
+                // coord_space::octad_to_standard(x + x_offset_octads, y + y_offset_octads);
+                draw_octad(layer, tx + origin_x, ty + origin_y, Color::WHITE);
+            }
+        }
+    }
+
+    draw_tetromino(layer, controlled_tetromino);
 }
 
 /// Coordinate space: 2x2 twoxel grid
@@ -115,26 +149,25 @@ fn draw_tetromino(layer: &mut Layer, tetromino_state: &TetrominoState) {
 
             let bit = 1 << (15 - (tetromino_y * 4 + tetromino_x));
             if bitmask & bit != 0 {
-                draw_block(layer, pixel_x, pixel_y, tetromino_state.color)
+                draw_tetris_block(layer, pixel_x, pixel_y, tetromino_state.color)
             }
         }
     }
 }
 
-/// Coordinate space: 2x2 twoxel grid
-fn draw_block(layer: &mut Layer, x: i16, y: i16, color: Color) {
-    let offsets = [
+/// Coordinate space: tetris-block
+fn draw_tetris_block(layer: &mut Layer, x: i16, y: i16, color: Color) {
+    let twoxel_offsets = [
         (0, 0, shift_hue(color, 7.0)),
-        (1, 0, scale_lightness(color, 0.8)),
-        (0, 1, scale_lightness(color, 0.8)),
+        (1, 0, scale_lightness(color, 0.75)),
+        (0, 1, scale_lightness(color, 0.75)),
         (1, 1, shift_hue(scale_lightness(color, 0.6), -7.0)),
     ];
 
-    let base_x = x as f32 * 2.0;
-    let base_y = y as f32;
-
-    for (dx, dy, color) in offsets {
-        draw_twoxel(layer, base_x + dx as f32, base_y + dy as f32 * 0.5, color);
+    for (dx, dy, color) in twoxel_offsets {
+        let (x, y) = coord_space::tetris_block_to_standard(x, y);
+        let (dx, dy) = coord_space::twoxel_to_standard(dx, dy);
+        draw_twoxel(layer, x + dx, y + dy, color);
     }
 }
 
@@ -179,3 +212,25 @@ pub fn shift_hue(c: Color, degrees: f32) -> Color {
 
     Color::new(r, g, b, c.a())
 }
+
+// pub mod coord_space {
+//     pub fn octad_to_standard(x: i16, y: i16) -> (f32, f32) {
+//         (x as f32 / 2.0, y as f32 / 4.0)
+//     }
+
+//     pub fn standard_to_octad(x: f32, y: f32) -> (i16, i16) {
+//         ((x * 2.0).round() as i16, (y * 4.0).round() as i16)
+//     }
+
+//     pub fn tetris_block_to_standard(x: i16, y: i16) -> (f32, f32) {
+//         (x as f32 * 2.0, y as f32)
+//     }
+
+//     pub fn standard_to_tetris_block(x: f32, y: f32) -> (i16, i16) {
+//         ((x / 2.0).round() as i16, y.round() as i16)
+//     }
+
+//     pub fn twoxel_to_standard(x: i16, y: i16) -> (f32, f32) {
+//         (x as f32, y as f32 * 0.5)
+//     }
+// }
